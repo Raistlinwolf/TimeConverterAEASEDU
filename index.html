@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>三時區時間轉換器（含時間區間）</title>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/utc.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/timezone.js"></script>
+  <script>
+    dayjs.extend(dayjs_plugin_utc);
+    dayjs.extend(dayjs_plugin_timezone);
+  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      max-width: 700px;
+      margin: auto;
+    }
+    label, select, input {
+      display: block;
+      margin: 1rem 0 0.5rem;
+      font-family: Arial, sans-serif;
+    }
+    .result {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+    .time-select {
+      display: flex;
+      gap: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h2>三時區時間轉換器（含時間區間）</h2>
+
+  <label for="tz1">選擇活動時區：</label>
+  <select id="tz1" onchange="updateTz1Defaults()"></select>
+
+  <label for="date">選擇活動日期：</label>
+  <input type="date" id="date">
+
+  <div class="time-select">
+    <div>
+      <label for="startTime">活動開始時間：</label>
+      <select id="startTime"></select>
+    </div>
+    <div>
+      <label for="duration">活動時間：</label>
+      <select id="duration"></select>
+    </div>
+  </div>
+
+  <label for="tz2">選擇對照時區 1：</label>
+  <select id="tz2"></select>
+
+  <label for="tz3">選擇對照時區 2：</label>
+  <select id="tz3"></select>
+
+  <button onclick="convertTime()">轉換時間</button>
+
+  <div class="result" id="result">
+    請選擇日期與時間區間進行轉換。
+  </div>
+
+<script>
+const timezones = [
+  "Asia/Taipei", "Asia/Beijing", "Asia/Tokyo", "Asia/Seoul", "Asia/Singapore",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Rome", "Europe/Madrid", "Europe/Amsterdam",
+  "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+  "America/Los_Angeles", "America/Seattle", "America/Miami", "America/Toronto",
+  "Australia/Sydney", "Australia/Perth", "UTC"
+];
+
+function populateTimezones() {
+  const selects = [document.getElementById('tz1'), document.getElementById('tz2'), document.getElementById('tz3')];
+  selects.forEach(select => {
+    timezones.forEach(tz => {
+      const option = document.createElement('option');
+      option.value = tz;
+      option.textContent = tz;
+      select.appendChild(option);
+    });
+  });
+
+  document.getElementById('tz1').value = "Asia/Taipei";
+  document.getElementById('tz2').value = "America/New_York";
+  document.getElementById('tz3').value = "Europe/Amsterdam";
+}
+
+function populateTimeOptions() {
+  const startSelect = document.getElementById('startTime');
+  const durationSelect = document.getElementById('duration');
+
+  startSelect.innerHTML = '';
+  for (let h = 0; h < 24; h++) {
+    for (let m of [0, 30]) {
+      const hour = h % 12 === 0 ? 12 : h % 12;
+      const period = h < 12 ? 'A.M.' : 'P.M.';
+      const time24 = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      const label = `${String(hour)}:${m === 0 ? '00' : '30'} ${period}`;
+      const opt = document.createElement('option');
+      opt.value = time24;
+      opt.textContent = label;
+      startSelect.appendChild(opt);
+    }
+  }
+
+  durationSelect.innerHTML = '';
+  for (let m = 30; m <= 480; m += 30) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    opt.textContent = `${h > 0 ? h + ' 小時' : ''}${mm > 0 ? ' ' + mm + ' 分' : ''}`;
+    durationSelect.appendChild(opt);
+  }
+
+  document.getElementById('startTime').value = "09:00";
+  document.getElementById('duration').value = "120";
+}
+
+function updateTz1Defaults() {
+  // 若時區改變，更新 startTime 與日期為當前該地時間
+  const tz = document.getElementById('tz1').value;
+  const now = dayjs().tz(tz);
+  const hour = now.hour();
+  const roundedMinutes = now.minute() < 30 ? '00' : '30';
+  const startTime = `${String(hour).padStart(2, '0')}:${roundedMinutes}`;
+  const today = now.format('YYYY-MM-DD');
+  document.getElementById('startTime').value = startTime;
+  document.getElementById('date').value = today;
+}
+
+function formatDateByLocale(d, tz) {
+  const dtf = new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'short' });
+  const weekday = dtf.format(d);
+  const localDate = dayjs(d).tz(tz);
+  const dd = localDate.date().toString().padStart(2, '0');
+  const mm = (localDate.month() + 1).toString().padStart(2, '0');
+  return {
+    dateStr: tz.startsWith("Europe") ? `${dd}/${mm}` : `${mm}/${dd}`,
+    day: weekday
+  };
+}
+
+function convertTime() {
+  const dateVal = document.getElementById('date').value;
+  const startTime = document.getElementById('startTime').value;
+  const durationMin = parseInt(document.getElementById('duration').value);
+  const tzList = [document.getElementById('tz1').value, document.getElementById('tz2').value, document.getElementById('tz3').value];
+
+  if (!dateVal || !startTime || isNaN(durationMin)) {
+    document.getElementById('result').innerHTML = "請完整選擇日期與時間區間。";
+    return;
+  }
+
+  const output = tzList.map(tz => {
+    const baseTz = tzList[0];
+    const start = dayjs.tz(`${dateVal}T${startTime}`, baseTz).tz(tz);
+    const end = dayjs.tz(`${dateVal}T${startTime}`, baseTz).add(durationMin, 'minute').tz(tz);
+    const info = formatDateByLocale(start.toDate(), tz);
+    const utcOffset = start.format('Z');
+    return `${info.dateStr} (${info.day}) ${start.format('hh:mm A')} - ${end.format('hh:mm A')} (${tz}, UTC${utcOffset})`;
+  }).join('<br>');
+
+  document.getElementById('result').innerHTML = `<strong>轉換結果：</strong><br>${output}`;
+}
+
+populateTimezones();
+populateTimeOptions();
+updateTz1Defaults();
+</script>
+
+</body>
+</html>
